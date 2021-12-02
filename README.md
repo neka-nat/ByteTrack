@@ -263,6 +263,10 @@ cd <ByteTrack_HOME>
 python3 tools/demo_track.py video -f exps/example/mot/yolox_x_mix_det.py -c pretrained/bytetrack_x_mot17.pth.tar --fp16 --fuse --save_result
 ```
 
+```shell
+streamlit run tools/web_demo_track.py -- -c pretrained/bytetrack_x_mot20.tar --fp16 --fuse --camid 0
+```
+
 ## Deploy
 
 1.  [ONNX export and ONNXRuntime](./deploy/ONNXRuntime)
