@@ -1,7 +1,11 @@
 import streamlit as st
 from loguru import logger
+import base64
+import datetime
 
 import cv2
+import numpy as np
+import pandas as pd
 
 import torch
 
@@ -19,16 +23,19 @@ import time
 IMAGE_EXT = [".jpg", ".jpeg", ".webp", ".bmp", ".png"]
 
 
+def get_table_download_link(df):
+    csv = df.to_csv(index=False)
+    b64 = base64.b64encode(csv.encode()).decode()
+    return f'<a href="data:file/csv;base64,{b64}">Download csv file</a>'
+
+
 def make_parser():
     parser = argparse.ArgumentParser("ByteTrack Demo!")
     parser.add_argument("-expn", "--experiment-name", type=str, default=None)
     parser.add_argument("-n", "--name", type=str, default=None, help="model name")
 
-    parser.add_argument(
-        #"--path", default="./datasets/mot/train/MOT17-05-FRCNN/img1", help="path to images or video"
-        "--path", default="./videos/20211119_nonoichi.mkv", help="path to images or video"
-    )
     parser.add_argument("--camid", type=int, default=0, help="webcam demo camera id")
+    # parser.add_argument("--camid", type=str, default="./videos/20211119_nonoichi.mkv", help="webcam demo camera id")
 
     # exp file
     parser.add_argument(
@@ -143,12 +150,20 @@ class Predictor(object):
 
 
 def imageflow_demo(predictor, args):
+    max_length = 100000
     image_loc = st.empty()
+    table = st.empty()
+    download_link = st.empty()
+    n_video = 8
+    chart = st.line_chart(np.zeros((1, n_video)))
+    columns = ["time"] + [f"count_video_{i}" for i in range(n_video)]
+    df = pd.DataFrame(columns=columns)
     cap = cv2.VideoCapture(args.camid)
     tracker = BYTETracker(args, frame_rate=30)
     timer = Timer()
     frame_id = 0
     results = []
+    counts_prev = None
     while True:
         if frame_id % 20 == 0:
             logger.info('Processing frame {} ({:.2f} fps)'.format(frame_id, 1. / max(1e-5, timer.average_time)))
@@ -176,9 +191,24 @@ def imageflow_demo(predictor, args):
                 timer.toc()
                 online_im = img_info['raw_img']
             image_loc.image(online_im[:, :, ::-1], output_format="PNG")
-            ch = cv2.waitKey(1)
-            if ch == 27 or ch == ord("q") or ch == ord("Q"):
-                break
+            counts = np.zeros((3, 3))
+            w_u = img_info['width'] // 3
+            h_u = img_info['height'] // 3
+            for tlx, tly, w, h in online_tlwhs:
+                center = (tlx + w / 2, tly + h / 2)
+                counts[min(2, int(center[1] / h_u)), min(2, int(center[0] / w_u))] += 1
+            counts = counts.reshape(1, 9)[:, :8]
+            chart.add_rows(counts)
+            if frame_id % 10 == 0:
+                if counts_prev is None or abs(counts - counts_prev).sum() > 0:
+                    df = df.append(pd.Series([datetime.datetime.now()] + counts[0].astype(int).tolist(),
+                                             index=columns),
+                                   ignore_index=True)
+                    table.dataframe(df)
+                    download_link.markdown(get_table_download_link(df), unsafe_allow_html=True)
+                if len(df) > max_length:
+                    df = df.iloc[(max_length // 2):, :]
+                counts_prev = counts
         else:
             break
         frame_id += 1
