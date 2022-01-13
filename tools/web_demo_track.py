@@ -155,7 +155,11 @@ def imageflow_demo(predictor, args):
     table = st.empty()
     download_link = st.empty()
     n_video = 8
-    chart = st.line_chart(np.zeros((1, n_video)))
+    cols = st.columns(3) + st.columns(3) + st.columns(3)
+    charts = []
+    for i, col in enumerate(cols[:n_video]):
+        with col:
+            charts.append(st.line_chart(pd.DataFrame(np.zeros((1,)), columns=[f"cam{i}"]), height=120))
     columns = ["time"] + [f"count_video_{i}" for i in range(n_video)]
     df = pd.DataFrame(columns=columns)
     cap = cv2.VideoCapture(args.camid)
@@ -198,7 +202,8 @@ def imageflow_demo(predictor, args):
                 center = (tlx + w / 2, tly + h / 2)
                 counts[min(2, int(center[1] / h_u)), min(2, int(center[0] / w_u))] += 1
             counts = counts.reshape(1, 9)[:, :8]
-            chart.add_rows(counts)
+            for i, chart in enumerate(charts):
+                chart.add_rows(pd.DataFrame(counts[:, i], columns=[f"cam{i}"]))
             if frame_id % 10 == 0:
                 if counts_prev is None or abs(counts - counts_prev).sum() > 0:
                     df = df.append(pd.Series([datetime.datetime.now()] + counts[0].astype(int).tolist(),
