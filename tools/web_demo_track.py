@@ -167,6 +167,9 @@ def imageflow_demo(predictor, args):
     timer = Timer()
     frame_id = 0
     results = []
+    id_list = set()
+    range_counts = np.zeros((3, 3))
+    start_time = datetime.datetime.now()
     counts_prev = None
     while True:
         if frame_id % 20 == 0:
@@ -198,22 +201,29 @@ def imageflow_demo(predictor, args):
             counts = np.zeros((3, 3))
             w_u = img_info['width'] // 3
             h_u = img_info['height'] // 3
-            for tlx, tly, w, h in online_tlwhs:
+            for (tlx, tly, w, h), online_id in zip(online_tlwhs, online_ids):
                 center = (tlx + w / 2, tly + h / 2)
                 counts[min(2, int(center[1] / h_u)), min(2, int(center[0] / w_u))] += 1
+                if online_id not in id_list:
+                    id_list.add(online_id)
+                    range_counts[min(2, int(center[1] / h_u)), min(2, int(center[0] / w_u))] += 1
             counts = counts.reshape(1, 9)[:, :8]
-            for i, chart in enumerate(charts):
-                chart.add_rows(pd.DataFrame(counts[:, i], columns=[f"cam{i}"]))
-            if frame_id % 10 == 0:
-                if counts_prev is None or abs(counts - counts_prev).sum() > 0:
-                    df = df.append(pd.Series([datetime.datetime.now()] + counts[0].astype(int).tolist(),
-                                             index=columns),
-                                   ignore_index=True)
-                    table.dataframe(df)
-                    download_link.markdown(get_table_download_link(df), unsafe_allow_html=True)
-                if len(df) > max_length:
-                    df = df.iloc[(max_length // 2):, :]
-                counts_prev = counts
+            if datetime.datetime.now() - start_time >= datetime.timedelta(seconds=1800):
+                tmp_counts = range_counts.reshape(1, 9)[:, :8]
+                for i, chart in enumerate(charts):
+                    chart.add_rows(pd.DataFrame(tmp_counts[:, i], columns=[f"cam{i}"]))
+                start_time = datetime.datetime.now()
+                id_list = set()
+                range_counts = np.zeros((3, 3))
+            if counts_prev is None or abs(counts - counts_prev).sum() > 0:
+                df = df.append(pd.Series([datetime.datetime.now()] + counts[0].astype(int).tolist(),
+                                         index=columns),
+                               ignore_index=True)
+                table.dataframe(df)
+                download_link.markdown(get_table_download_link(df), unsafe_allow_html=True)
+            if len(df) > max_length:
+                df = df.iloc[(max_length // 2):, :]
+            counts_prev = counts
         else:
             break
         frame_id += 1
