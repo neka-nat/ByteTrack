@@ -164,7 +164,6 @@ def imageflow_demo(predictor, args):
     tracker = BYTETracker(args, frame_rate=30)
     timer = Timer()
     frame_id = 0
-    results = []
     id_list = set()
     range_counts = np.zeros((3, 3))
     start_time = datetime.datetime.now()
@@ -188,7 +187,6 @@ def imageflow_demo(predictor, args):
                         online_tlwhs.append(tlwh)
                         online_ids.append(tid)
                         online_scores.append(t.score)
-                results.append((frame_id + 1, online_tlwhs, online_ids, online_scores))
                 timer.toc()
                 online_im = plot_tracking(img_info['raw_img'], online_tlwhs, online_ids, frame_id=frame_id + 1,
                                           fps=1. / timer.average_time)
